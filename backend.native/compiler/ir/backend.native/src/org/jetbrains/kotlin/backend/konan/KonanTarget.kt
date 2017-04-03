@@ -19,12 +19,12 @@ package org.jetbrains.kotlin.backend.konan
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
 
-enum class KonanTarget(var enabled: Boolean = false) {
-    IPHONE,
-    IPHONE_SIM,
-    LINUX,
-    MACBOOK,
-    RASPBERRYPI
+enum class KonanTarget(val suffix: String, var enabled: Boolean = false) {
+    IPHONE("ios"),
+    IPHONE_SIM("ios-sim"),
+    LINUX("linux"),
+    MACBOOK("osx"),
+    RASPBERRYPI("raspberrypi")
 }
 
 class TargetManager(val config: CompilerConfiguration) {
@@ -75,24 +75,8 @@ class TargetManager(val config: CompilerConfiguration) {
     }
 
     fun currentSuffix(): String {
-        if (host == KonanTarget.MACBOOK) {
-            when (current) {
-                KonanTarget.MACBOOK -> return("osx")
-                KonanTarget.IPHONE -> return("osx-ios")
-                KonanTarget.IPHONE_SIM -> return("osx-ios-sim")
-                else -> error("Impossible combination of $host and $current")
-            }
-        }
-        if (host == KonanTarget.LINUX) {
-            when (current) {
-                KonanTarget.LINUX -> return("linux")
-                KonanTarget.RASPBERRYPI -> return("linux-raspberrypi")
-                KonanTarget.IPHONE -> return("linux-ios")
-                KonanTarget.IPHONE_SIM -> return("linux-ios-sim")
-                else -> error("Impossible combination of $host and $current")
-            }
-        }
-        error("Unknown host target $host)")
+        return host.suffix + 
+            if (host != current) "-${current.suffix}" else ""
     }
 
     companion object {
