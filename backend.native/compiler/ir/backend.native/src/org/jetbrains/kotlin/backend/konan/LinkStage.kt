@@ -151,26 +151,6 @@ internal class RaspberryPiPlatform(distribution: Distribution)
             "-L${sysRoot}/../lib/arm-linux-gnueabihf", 
             "-L${sysRoot}/lib/arm-linux-gnueabihf", 
             "-L${sysRoot}/usr/lib/arm-linux-gnueabihf")
-/*
-    override fun linkCommand(objectFiles: List<String>, executable: String, optimize: Boolean): List<String> {
-        // TODO: Can we extract more to the konan.properties?
-        return mutableListOf<String>("$linker",
-            "--sysroot=${sysRoot}",
-            "-export-dynamic", "-z", "relro", "--hash-style=gnu",
-            "--build-id", "--eh-frame-hdr",
-            "-dynamic-linker", "/lib/ld-linux-armhf.so.3",
-            "-o", executable,
-            "${sysRoot}/usr/lib/crt1.o", "${sysRoot}/usr/lib/crti.o", "${libGcc}/crtbegin.o",
-            "-L${llvmLib}", "-L${libGcc}", 
-            "-L${sysRoot}/../lib/arm-linux-gnueabihf", "-L${sysRoot}/lib/arm-linux-gnueabihf", "-L${sysRoot}/usr/lib/arm-linux-gnueabihf", 
-            "-L${sysRoot}/../lib", "-L${sysRoot}/lib", "-L${sysRoot}/usr/lib") +
-            if (optimize) listOf("-plugin", "$llvmLib/LLVMgold.so") + pluginOptimizationFlags else {listOf<String>()} +
-            objectFiles +
-            if (optimize) linkerOptimizationFlags else {listOf<String>()} +
-            linkerKonanFlags +
-            listOf("-lgcc", "-lgcc_s", "-lc", "${libGcc}/crtend.o", "${sysRoot}/usr/lib/crtn.o")
-    }
-*/
 }
 
 internal class LinkStage(val context: Context) {
@@ -183,21 +163,18 @@ internal class LinkStage(val context: Context) {
     private val properties = distribution.properties
 
     val platform = when (TargetManager.host) {
-        KonanTarget.LINUX -> when (targetManager.current) {
-            KonanTarget.LINUX -> LinuxPlatform(distribution)
-            KonanTarget.RASPBERRYPI -> RaspberryPiPlatform(distribution)
-            else -> TODO("Target not implemented yet.")
+        Konantarget.Linux ->
+            if (targetManager.crossCompile)
+                RaspberryPiPlatform(distribution)
+            else 
+                LinuxPlatform(distribution)
+
+        KonanTarget.MACBOOK -> 
+            if (targetManager.crossCompile) 
+                MacOSBasedPlatform(distribution)
+            else 
+                MacOSPlatform(distribution)
         }
-        KonanTarget.MACBOOK -> when (targetManager.current) {
-            KonanTarget.IPHONE_SIM
-            -> MacOSBasedPlatform(distribution)
-            KonanTarget.IPHONE
-            -> MacOSBasedPlatform(distribution)
-            KonanTarget.MACBOOK
-            -> MacOSPlatform(distribution)
-            else -> TODO("Target not implemented yet.")
-        }
-        else -> TODO("Target not implemented yet")
     }
 
     val suffix = targetManager.currentSuffix()
@@ -276,8 +253,8 @@ internal class LinkStage(val context: Context) {
 
     fun executeCommand(vararg command: String): Int {
 
-        context.log{""}
-        context.log{command.asList<String>().joinToString(" ")}
+        context.log("")
+        context.log(command.asList<String>().joinToString(" "))
 
         val builder = ProcessBuilder(command.asList())
 
@@ -297,7 +274,7 @@ internal class LinkStage(val context: Context) {
     }
 
     fun linkStage() {
-        context.log{"# Compiler root: ${distribution.konanHome}"}
+        context.log("# Compiler root: ${distribution.konanHome}")
 
         val bitcodeFiles = listOf<BitcodeFile>(emitted, distribution.start, 
             distribution.runtime, distribution.launcher) + libraries
