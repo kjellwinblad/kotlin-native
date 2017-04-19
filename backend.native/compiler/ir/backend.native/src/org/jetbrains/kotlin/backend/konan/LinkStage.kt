@@ -68,7 +68,6 @@ internal abstract class PlatformFlags(val distribution: Distribution) {
 internal open class MacOSPlatform(distribution: Distribution)
     : PlatformFlags(distribution) {
 
-    //override val hostSuffix = "osx"
     override val linker = "${distribution.sysRoot}/usr/bin/ld"
 
     open val osVersionMin = listOf(
@@ -76,7 +75,7 @@ internal open class MacOSPlatform(distribution: Distribution)
         propertyTargetString("osVersionMin")!!+".0")
                             
     open val sysRoot = distribution.sysRoot
-    open val targetSysRoot = sysRoot
+    open val targetSysRoot = distribution.targetSysRoot
 
     override fun linkCommand(objectFiles: List<String>, executable: String, optimize: Boolean): List<String> {
 
@@ -95,17 +94,13 @@ internal open class MacOSPlatform(distribution: Distribution)
 
 internal class MacOSBasedPlatform(distribution: Distribution)
     : MacOSPlatform(distribution) {
-
-    override val targetSysRoot = "${distribution.dependenciesDir}/${propertyTargetString("targetSysRoot")!!}"
 }
 
 internal open class LinuxPlatform(distribution: Distribution)
     : PlatformFlags(distribution) {
 
-    // TODO: REMOVE ME.
-    //override val hostSuffix = "linux"
-
     open val sysRoot = distribution.sysRoot
+    open val targetSysRoot = distribution.targetSysRoot
 
     val llvmLib = distribution.llvmLib
     val libGcc = distribution.libGcc
@@ -118,20 +113,20 @@ internal open class LinuxPlatform(distribution: Distribution)
         propertyTargetString("dynamicLinker")
 
     open val specificLibs = listOf(
-            "-L${sysRoot}/../lib64", "-L${sysRoot}/lib64", "-L${sysRoot}/usr/lib64" )
+            "-L${targetSysRoot}/../lib64", "-L${targetSysRoot}/lib64", "-L${targetSysRoot}/usr/lib64" )
 
     override fun linkCommand(objectFiles: List<String>, executable: String, optimize: Boolean): List<String> {
         // TODO: Can we extract more to the konan.properties?
         return mutableListOf<String>("$linker",
-            "--sysroot=${sysRoot}",
+            "--sysroot=${targetSysRoot}",
             "-export-dynamic", "-z", "relro", "--hash-style=gnu", 
             "--build-id", "--eh-frame-hdr", // "-m", "elf_x86_64",
             "-dynamic-linker", dynamicLinker,
             "-o", executable,
-            "${sysRoot}/usr/lib64/crt1.o", "${sysRoot}/usr/lib64/crti.o", "${libGcc}/crtbegin.o",
+            "${targetSysRoot}/usr/lib64/crt1.o", "${targetSysRoot}/usr/lib64/crti.o", "${libGcc}/crtbegin.o",
             "-L${llvmLib}", "-L${libGcc}") +
             specificLibs +
-            listOf("-L${sysRoot}/../lib", "-L${sysRoot}/lib", "-L${sysRoot}/usr/lib") + 
+            listOf("-L${targetSysRoot}/../lib", "-L${targetSysRoot}/lib", "-L${targetSysRoot}/usr/lib") + 
             if (optimize) listOf("-plugin", "$llvmLib/LLVMgold.so") + pluginOptimizationFlags else {listOf<String>()} +
             objectFiles +
             if (optimize) linkerOptimizationFlags else {listOf<String>()} +
@@ -139,18 +134,17 @@ internal open class LinuxPlatform(distribution: Distribution)
             listOf("-lgcc", "--as-needed", "-lgcc_s", "--no-as-needed", 
             "-lc", "-lgcc", "--as-needed", "-lgcc_s", "--no-as-needed",
             "${libGcc}/crtend.o",
-            "${sysRoot}/usr/lib64/crtn.o")
+            "${targetSysRoot}/usr/lib64/crtn.o")
     }
 }
 
 internal class RaspberryPiPlatform(distribution: Distribution)
     : LinuxPlatform(distribution) {
 
-    override val sysRoot = "${distribution.dependenciesDir}/${properties.propertyString("targetSysRoot.linux-raspberrypi")!!}"
     override val specificLibs = listOf(
-            "-L${sysRoot}/../lib/arm-linux-gnueabihf", 
-            "-L${sysRoot}/lib/arm-linux-gnueabihf", 
-            "-L${sysRoot}/usr/lib/arm-linux-gnueabihf")
+            "-L${targetSysRoot}/../lib/arm-linux-gnueabihf", 
+            "-L${targetSysRoot}/lib/arm-linux-gnueabihf", 
+            "-L${targetSysRoot}/usr/lib/arm-linux-gnueabihf")
 }
 
 internal class LinkStage(val context: Context) {
@@ -163,7 +157,7 @@ internal class LinkStage(val context: Context) {
     private val properties = distribution.properties
 
     val platform = when (TargetManager.host) {
-        Konantarget.Linux ->
+        KonanTarget.LINUX ->
             if (targetManager.crossCompile)
                 RaspberryPiPlatform(distribution)
             else 
@@ -174,7 +168,8 @@ internal class LinkStage(val context: Context) {
                 MacOSBasedPlatform(distribution)
             else 
                 MacOSPlatform(distribution)
-        }
+        else ->
+            error("Unexpected host platform")
     }
 
     val suffix = targetManager.currentSuffix()
@@ -253,8 +248,8 @@ internal class LinkStage(val context: Context) {
 
     fun executeCommand(vararg command: String): Int {
 
-        context.log("")
-        context.log(command.asList<String>().joinToString(" "))
+        context.log{""}
+        context.log{command.asList<String>().joinToString(" ")}
 
         val builder = ProcessBuilder(command.asList())
 
@@ -274,7 +269,7 @@ internal class LinkStage(val context: Context) {
     }
 
     fun linkStage() {
-        context.log("# Compiler root: ${distribution.konanHome}")
+        context.log{"# Compiler root: ${distribution.konanHome}"}
 
         val bitcodeFiles = listOf<BitcodeFile>(emitted, distribution.start, 
             distribution.runtime, distribution.launcher) + libraries
