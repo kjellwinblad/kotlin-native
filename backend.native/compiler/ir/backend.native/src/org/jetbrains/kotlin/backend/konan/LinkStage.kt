@@ -71,7 +71,7 @@ internal open class MacOSPlatform(distribution: Distribution)
     override val linker = "${distribution.sysRoot}/usr/bin/ld"
 
     open val osVersionMin = listOf(
-        propertyTargetString("osVersionMinFlag")!!,
+        propertyTargetString("osVersionMinFlagLd")!!,
         propertyTargetString("osVersionMin")!!+".0")
                             
     open val sysRoot = distribution.sysRoot
